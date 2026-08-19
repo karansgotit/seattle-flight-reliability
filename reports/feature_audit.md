@@ -18,7 +18,6 @@
 | DayOfWeek | same as year |
 | IATA_CODE_Reporting_Airline | |
 | Flight_Number_Reporting_Airline | |
-| Origin | |
 | Dest | |
 | CRSDepTime | |
 | CRSArrTime | |
@@ -126,3 +125,4 @@
 | ArrTimeBlk |This is just a range on the Scheduled Arrival time that is why it is in the drop column|
 | Flights | |
 | DistanceGroup | |
+| Origin | All rows are SEA-origin after filtering, so this column is constant and has no predictive value |
