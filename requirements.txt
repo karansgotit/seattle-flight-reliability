@@ -1,6 +1,22 @@
-pandas
-numpy
-scikit-learn
-matplotlib
-seaborn
-jupyter
+# Runtime dependencies — what the deployed Streamlit app needs to run.
+#
+# Pinned to the versions of the environment the model is trained in
+# (anaconda base, Python 3.13.9). This is deliberate, not cosmetic: per
+# scikit-learn's model persistence docs, "There are no supported ways to load
+# a model trained with a different version of scikit-learn", so the version
+# that writes the artifact and the version that loads it must match.
+# https://scikit-learn.org/stable/model_persistence.html
+#
+# Re-pin from `pip freeze` in the training environment if that environment
+# changes, and re-check the links in DOCUMENTATION_SOURCES.md against the
+# pinned scikit-learn version.
+#
+# Note: requirements.txt cannot pin the Python version. Local is 3.13.9 —
+# set the matching version in Community Cloud's advanced settings at deploy.
+
+pandas==2.3.3
+numpy==2.3.5
+scikit-learn==1.7.2
+joblib==1.5.2
+matplotlib==3.10.6
+streamlit==1.51.0

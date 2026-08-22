@@ -15,8 +15,9 @@ never substitute for a doc citation when a methodology decision is being justifi
   should stay the complete inventory, not a partial one.
 - If a tutorial and a doc page below disagree, the doc wins (existing rule, see
   `PROJECT_ISSUES.md` "Source rule").
-- `scikit-learn` is unpinned in `requirements.txt`, so these links point at *current stable*
-  docs. Once the version gets pinned (Issue 11), re-check links still match that version.
+- `scikit-learn` is pinned to **1.7.2** in `requirements.txt`. These links point at
+  *current stable* docs, so re-check that a page still describes 1.7.2 behaviour before
+  citing it — and re-check all of them if the pin is ever bumped.
 
 ## Official documentation (authoritative — cite these)
 
@@ -43,19 +44,17 @@ never substitute for a doc citation when a methodology decision is being justifi
 - [Model persistence](https://scikit-learn.org/stable/model_persistence.html) (security/version-compatibility warnings)
 
 ### numpy
-Declared in `requirements.txt`, not yet imported anywhere in the repo.
+Pinned in `requirements.txt`, not yet imported anywhere in the repo — the Issue 2 date-axis
+split will be the first use.
 - [NumPy documentation home](https://numpy.org/doc/stable/) — add specific pages here once numeric code beyond pandas is written
 
 ### matplotlib
-Declared in `requirements.txt`, not yet imported anywhere in the repo.
+Pinned in `requirements.txt`, not yet imported anywhere in the repo — first use is the
+Issue 6 / Issue 12 residual diagnostics.
 - [Matplotlib documentation home](https://matplotlib.org/stable/index.html)
 
-### seaborn
-Declared in `requirements.txt`, not yet imported anywhere in the repo.
-- [Seaborn documentation home](https://seaborn.pydata.org/)
-
 ### Streamlit
-Planned for Gate 3 (Issues 14-16); **not yet in `requirements.txt`** — add it when this work starts.
+Planned for Gate 3 (Issues 14-16); pinned to **1.51.0** in `requirements.txt`.
 - [Get started](https://docs.streamlit.io/get-started)
 - [Deploy overview](https://docs.streamlit.io/deploy)
 - [Prep and deploy on Community Cloud](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app)

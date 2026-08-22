@@ -18,8 +18,17 @@ search the playlist by day number rather than scrolling to a position; and the s
 **no episode on temporal or time-aware splitting**, which is the single most important
 evaluation decision in this project — that one stays on the sklearn docs.
 
-**Trust rule:** where CampusX code disagrees with the current sklearn docs, the docs win.
-The videos are good teaching material but the API has moved since they were recorded.
+**Source rule:** official documentation is the authority. Where CampusX or Baker disagrees
+with the current sklearn docs, the docs win — the tutorials are good teaching material but
+the API has moved since they were recorded.
+
+Docs are not always the best place to meet a concept for the *first* time, though: reference
+pages are written for someone who already knows what the thing is. So the rule is one lesson
+first, then docs, and only for genuinely new concepts. In this backlog that is four videos
+total — Days 27, 28, 50, and 65. Everything else goes straight to documentation.
+
+For those four, the companion notebook in the CampusX repo is usually faster than the video.
+Skim the notebook first; watch only if the code alone doesn't land.
 
 ---
 
@@ -63,40 +72,95 @@ if datetime parsing needs a refresher.
 
 ---
 
-### Issue 2 — Build the temporal holdout split
+### Issue 2 — Build the temporal train/test split and CV strategy
 
 **Labels:** `gate-1`, `evaluation`
 
-Split into train / validation / test by calendar date. Not by row position — a single
-date must not be divided across two partitions.
+Split into **train pool / test** by calendar date. Not by row position — a single date
+must not be divided across the two partitions. There is no separate fixed validation
+partition: every candidate comparison in Gate 1–2 (Issues 3, 4, 5, 8, 9) is scored with
+`TimeSeriesSplit` cross-validation over the train pool, so each fold's held-out rows act
+as validation. The test partition is touched exactly once, at Issue 10.
+
+**Run `TimeSeriesSplit` over the array of unique dates, not over the rows.** This is the
+part that is easy to get wrong. `TimeSeriesSplit` splits on row position and knows nothing
+about `FlightDate`; the docs require that "samples must be equally spaced" so that "each
+test set covers the same time duration." Flight rows are *not* equally spaced — this
+dataset runs 242–555 flights/day (2.29×), with summer months carrying ~34% more traffic
+than winter (Jun–Aug daily mean 513 vs Dec–Feb 383). Splitting raw rows therefore produces both defects at once, verified against
+the real data:
+
+- every one of the 5 fold boundaries lands mid-date, splitting one calendar date across
+  train and validation — the exact thing this issue forbids
+- folds hold identical row counts but cover 106–136 days, so per-fold MAEs are not
+  comparable
+
+Splitting the 731 unique dates instead fixes both: dates *are* equally spaced (one per
+day), so every fold covers an identical span and no date can straddle a boundary. Take the
+fold indices from the date array, then map them back to row masks with
+`df['FlightDate'].isin(dates[idx])`.
+
+**Verified design** (recompute rather than trusting these numbers):
+
+| partition | range | dates | rows |
+|---|---|---|---|
+| train pool | 2024-01-01 → 2025-09-30 | 639 | 285,649 |
+| test | 2025-10-01 → 2025-12-31 | 92 | 38,841 (12.0%) |
+
+`TimeSeriesSplit(n_splits=5)` over the 639 train-pool dates gives five folds of exactly
+106 validation days each, with train windows expanding 109 → 533 days (successive train
+sets are supersets, as the docs describe).
 
 **Done when**
-- Split is defined by date boundaries, and those boundaries are stated in the notebook
-- No calendar date appears in more than one partition (asserted in code, not assumed)
-- Partitions are strictly ordered in time: train earliest, test latest
-- Row counts and date ranges printed for each partition
+- Split is defined by a single date boundary (train pool / test), stated in the notebook
+- The splitter is run over unique dates and mapped back to rows — asserted in code by
+  checking that no date appears in both sides of any fold, and none in both partitions
+- Train pool is strictly earlier in time than test
+- A splitter is instantiated once over the train pool (fixed `n_splits`) and reused for
+  every candidate comparison in Issues 3, 4, 5, 8, 9 — same folds, so comparisons are
+  apples-to-apples
+- Row counts, date counts, and date ranges printed per fold and per partition
+- `gap=` considered and the choice recorded. Default `gap=0` is defensible here because
+  no feature is lagged or rolling — every predictor is known at booking time — so adjacent
+  dates share no constructed value. Revisit if a lagged feature is ever added.
+- The seasonal limitation is written down: a temporal holdout forces the test partition to
+  be Q4-only, so the final number reflects winter operations. Keep month and day-of-week
+  in the feature set, and restate this in the Issue 6 note.
 
 **Learn this first**
 
 **MUST**
 - [sklearn — Cross-validation user guide](https://scikit-learn.org/stable/modules/cross_validation.html)
-  — the TimeSeriesSplit section states the core argument: ordinary CV on time-ordered
-  data trains on the future and evaluates on the past. Read it for the principle; you are
-  building a single date-cut holdout, not rolling folds.
+  — two lines govern this issue. On why there is no validation partition:
+  > "A test set should still be held out for final evaluation, but the validation set is
+  > no longer needed when doing CV."
+
+  And on why ordinary k-fold is wrong here:
+  > "classical cross-validation techniques such as `KFold` and `ShuffleSplit` assume the
+  > samples are independent and identically distributed, and would result in unreasonable
+  > correlation between training and testing instances (yielding poor estimates of
+  > generalization error) on time series data."
+- [sklearn — `TimeSeriesSplit` API reference](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.TimeSeriesSplit.html)
+  — the constraint that drives the split-on-dates decision above:
+  > "To ensure comparable metrics across folds, samples must be equally spaced. Once this
+  > condition is met, each test set covers the same time duration, while the train set
+  > size accumulates data from previous splits."
+
+  Also read `n_splits`, `gap`, and `max_train_size`.
 
 **Optional**
-- [sklearn — TimeSeriesSplit reference](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.TimeSeriesSplit.html)
 - Baker, [Training and Validation](https://ggbaker.ca/data-science/content/ml.html#trainvalid)
   — see the warning below before using it
 
 > **CampusX gap.** The 100 Days series covers train/test splitting generically but has no
-> episode on time-aware splitting. This issue has no CampusX equivalent — use the docs.
+> episode on time-aware splitting or `TimeSeriesSplit`. This issue has no CampusX
+> equivalent — use the docs.
 >
 > **Baker gap too.** Baker's [Training and Validation](https://ggbaker.ca/data-science/content/ml.html#trainvalid)
 > section is worth reading for the overfitting argument, but he demonstrates
-> `train_test_split` with its default random shuffle and never covers temporal splits.
-> Read it for the reasoning, not the split call — copying that pattern here is the exact
-> mistake this issue exists to prevent.
+> `train_test_split` with its default random shuffle and never covers temporal splits or
+> cross-validation. Read it for the reasoning, not the split call — copying that pattern
+> here is the exact mistake this issue exists to prevent.
 
 ---
 
@@ -104,20 +168,21 @@ date must not be divided across two partitions.
 
 **Labels:** `gate-1`, `evaluation`
 
-Build the naive comparator the model has to beat: a per-profile historical median
-computed from training data only.
+Build the naive comparator the model has to beat: a per-profile historical median,
+scored with the same `TimeSeriesSplit` folds from Issue 2 as every other candidate.
 
 **Done when**
-- Baseline is fit on training rows only
-- Profiles present in validation but absent from training are handled explicitly, and
-  the fallback is documented
-- Baseline produces a prediction for every validation row — no silent nulls
-- Validation MAE recorded
+- Within each fold, the baseline is fit on that fold's training rows only
+- Profiles present in a fold's held-out rows but absent from that fold's training rows
+  are handled explicitly, and the fallback is documented
+- Baseline produces a prediction for every held-out row in every fold — no silent nulls
+- Mean and std MAE across folds recorded
 
 **Learn this first**
 
 **MUST:** nothing new. This is the groupby → median → merge → fillna pattern;
-`pandas/pandas_numpy_practice.ipynb` (the BikeIndia set) covers the mechanics.
+`pandas/pandas_numpy_practice.ipynb` (the BikeIndia set) covers the mechanics. Apply it
+inside each CV fold instead of once.
 
 ---
 
@@ -130,13 +195,14 @@ only. One-hot was chosen over label encoding (imposes false ordinal structure on
 airport codes) and target encoding (adds leakage risk) — that decision is closed.
 
 **Done when**
-- Encoder fit on train, applied to validation and test without refitting
-- Categories appearing in validation or test but not in training do not crash the
-  transform; the handling is a deliberate, documented choice
+- Encoder lives inside a `Pipeline` (preprocessing + estimator), so `cross_val_score` /
+  `cross_validate` refits it fresh on each fold's training rows — never fit once on the
+  whole train pool. This is the same `Pipeline` object Issue 11 later persists.
+- Categories appearing in a fold's held-out rows, or in the test partition, but not in
+  that fold's training rows do not crash the transform; the handling is a deliberate,
+  documented choice
 - Resulting feature count recorded — high-cardinality columns expand fast and this
   number matters for the write-up
-- Fitted preprocessing object retained so it can later be incorporated into the serialized
-  Pipeline (Issue 11)
 
 **Learn this first**
 
@@ -147,17 +213,19 @@ airport codes) and target encoding (adds leakage risk) — that decision is clos
 2. CampusX **Day 28 — ColumnTransformer**
    ([notebook](https://github.com/campusx-official/100-days-of-machine-learning/tree/main/day28-column-transformer))
    — the practical answer to applying different transforms to different column groups
-3. [sklearn — `OneHotEncoder` API reference](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.OneHotEncoder.html)
+3. CampusX **Day 29 — ML Pipelines A-Z**
+   ([notebook](https://github.com/campusx-official/100-days-of-machine-learning/tree/main/day29-sklearn-pipelines))
+   — required starting here, not at Issue 11: the encoder only avoids fold-to-fold leakage
+   if it's wrapped in a `Pipeline` before it's handed to cross-validation
+4. [sklearn — `OneHotEncoder` API reference](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.OneHotEncoder.html)
    — the authority on current behaviour for categories not seen during fit. CampusX teaches
    the concept; this page governs the implementation.
-4. [sklearn — Common pitfalls: data leakage](https://scikit-learn.org/stable/common_pitfalls.html)
+5. [sklearn — Common pitfalls: data leakage](https://scikit-learn.org/stable/common_pitfalls.html)
    — states the rule plainly: split first, `fit_transform` on train, plain `transform`
-   on test, never `fit` on test
+   on test, never `fit` on test. With CV this means fit-inside-each-fold, which is what
+   passing a `Pipeline` to `cross_val_score` does automatically.
 
 **Optional**
-- CampusX **Day 29 — ML Pipelines A-Z**
-  ([notebook](https://github.com/campusx-official/100-days-of-machine-learning/tree/main/day29-sklearn-pipelines))
-  — can wait until Issue 11, where it becomes required
 - [sklearn — Preprocessing data user guide](https://scikit-learn.org/stable/modules/preprocessing.html),
   the categorical features section
 
@@ -167,14 +235,18 @@ airport codes) and target encoding (adds leakage risk) — that decision is clos
 
 **Labels:** `gate-1`, `modelling`
 
-Fit the linear model on the training partition and score it on validation. This is the
-first genuinely new modelling step in the project.
+Put the linear model inside the Issue 4 `Pipeline` and score it with `cross_val_score`
+(or `cross_validate`) over the Issue 2 `TimeSeriesSplit` folds. This is the first
+genuinely new modelling step in the project.
 
 **Done when**
-- Model fit on training partition only
-- Validation MAE recorded alongside the Issue 3 baseline MAE
-- Coefficients inspected; you can say in one sentence what the model is doing and what
-  a coefficient means here
+- Model only ever sees each fold's training rows during that fold's fit — never the
+  whole train pool at once
+- Mean and std CV MAE recorded alongside the Issue 3 baseline's mean/std MAE, same folds
+- Coefficients inspected from a separate copy of the pipeline refit on the *full* train
+  pool, for interpretation only — that refit is not what CV scored, and is not the model
+  compared in Issue 9. You can say in one sentence what the model is doing and what a
+  coefficient means here.
 - Nothing has touched the test partition yet
 
 **Learn this first**
@@ -199,6 +271,7 @@ first genuinely new modelling step in the project.
   (27 min) if the mechanism still feels thin after CampusX. Concept-first and demonstrated
   in R, so it complements rather than repeats.
 - [sklearn — Linear Models user guide](https://scikit-learn.org/stable/modules/linear_model.html), §1.1.1
+- [sklearn — `cross_val_score` API reference](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.cross_val_score.html)
 
 ---
 
@@ -210,10 +283,15 @@ Write `reports/baseline_evaluation.md`: what was compared, on what split, with w
 result, and whether the linear model actually beat the naive baseline.
 
 **Done when**
-- Split design and date boundaries stated
-- Both MAE figures reported, with lift over the naive baseline
+- Split design stated: train pool / test date boundary, plus the `TimeSeriesSplit`
+  fold count used for CV
+- Mean ± std CV MAE reported for both baseline and model, on the same folds, with lift
+  over the naive baseline
 - Honest target restated: delay conditional on the flight operating and arriving,
   carrying no cancellation or diversion signal
+- Seasonal caveat stated (from Issue 2): the temporal holdout makes the test partition
+  Q4-only, so the headline test number describes winter operations and is not a
+  year-round average
 - If the model did **not** beat the naive baseline, the note diagnoses which cause
   applies rather than declaring failure — the execution plan §8 lists the five
   candidate causes and this is not an automatic trigger to switch projects
@@ -245,14 +323,15 @@ baseline beats the naive per-profile baseline; data scoping within budget.
 
 **Labels:** `gate-2`, `modelling`
 
-Fit a RandomForest on the same split and preprocessing. This is "attempt, cut if
-needed" — if it overruns, ship the linear baseline and note RF as deferred.
+Fit a RandomForest inside the same `Pipeline` shape and score it with the same
+`TimeSeriesSplit` folds as the linear model. This is "attempt, cut if needed" — if it
+overruns, ship the linear baseline and note RF as deferred.
 
 **Done when**
-- Trained on the identical training partition and preprocessing as the linear model
-- Validation MAE recorded on the same basis, so the comparison is real
+- Scored on the identical folds and preprocessing `Pipeline` as the linear model
+- Mean and std CV MAE recorded on the same basis, so the comparison is real
 - Training time and any memory constraints noted — one-hot expansion makes this heavier
-  than it looks
+  than it looks, and it now trains once per fold instead of once
 
 **Learn this first**
 
@@ -275,15 +354,15 @@ needed" — if it overruns, ship the linear baseline and note RF as deferred.
 
 ---
 
-### Issue 9 — Choose the final model on validation
+### Issue 9 — Choose the final model on cross-validated MAE
 
 **Labels:** `gate-2`, `evaluation`
 
-Compare candidates on **validation**. The test set is untouched until the choice is
-already made.
+Compare candidates on **cross-validated MAE** (mean ± std across the Issue 2
+`TimeSeriesSplit` folds). The test set is untouched until the choice is already made.
 
 **Done when**
-- All candidate comparisons documented on validation
+- All candidate comparisons documented on CV MAE, same folds for every candidate
 - One model selected, with the reason written down before the test run
 - Test set has still not been used
 
@@ -299,13 +378,18 @@ to make choices about the model.
 
 **Labels:** `gate-2`, `evaluation`
 
-Evaluate the chosen model on the test partition and record the result. The prohibition is
-on changing the modelling process in response to what you see — not on the mechanical act
-of calling predict.
+Refit the chosen model's `Pipeline` on the **entire train pool** (all folds combined —
+Issue 9's CV scoring never saw the full pool at once), then evaluate that single refit
+model on the test partition and record the result. The prohibition is on changing the
+modelling process in response to what you see — not on the mechanical act of calling
+predict.
 
 **Done when**
+- Chosen `Pipeline` refit on the full train pool before touching test — this is a
+  different fit than any of the Issue 9 CV folds
 - Test MAE and RMSE recorded for the chosen model and the naive baseline
-- Train-vs-test gap reported and interpreted
+- Train-vs-test gap reported and interpreted (train score = refit on full train pool;
+  compare against the Issue 9 CV mean, not a single validation number)
 - Lift over the naive baseline reported, including on thin-support flight profiles
 - Test performance is not used to alter model selection, preprocessing, features, or
   hyperparameters. Any rerun after the first evaluation is for reproducibility or to
@@ -315,8 +399,8 @@ of calling predict.
 
 **MUST**
 - Baker, [Training and Validation](https://ggbaker.ca/data-science/content/ml.html#trainvalid)
-  — states the criterion this issue turns on: a big drop from training score to validation
-  score is usually a sign of overfitting
+  — states the criterion this issue turns on: a big drop from training score to CV score
+  is usually a sign of overfitting
 
 **Optional:** CampusX **Day 49 — Regression Metrics**
 ([notebook](https://github.com/campusx-official/100-days-of-machine-learning/tree/main/day49-regression-metrics))
@@ -328,25 +412,20 @@ of calling predict.
 
 **Labels:** `gate-2`, `deployment-prep`
 
-Persist the fitted preprocessing and estimator so the app reproduces training-time
-transformations exactly.
+Persist the exact `Pipeline` object Issue 10 refit on the full train pool, so the app
+reproduces training-time transformations exactly.
 
 **Done when**
-- Fitted preprocessing and estimator persisted **together as a single sklearn Pipeline**
-  where practical. If they must stay separate, the notebook states why and shows how the
-  app is guaranteed to apply the identical transforms used in training.
-- A fresh process can load the artifacts and produce a prediction without refitting
+- The Issue 10 full-train-pool refit — preprocessing and estimator together as one
+  `Pipeline`, the same shape built back in Issue 4 — is what gets persisted, not a
+  separate refit
+- A fresh process can load the artifact and produce a prediction without refitting
 - Library versions pinned in `requirements.txt`
 - Artifact paths and the gitignore decision documented
 
 **Learn this first**
 
 **MUST**
-- CampusX **Day 29 — ML Pipelines A-Z**
-  ([notebook](https://github.com/campusx-official/100-days-of-machine-learning/tree/main/day29-sklearn-pipelines))
-  — demonstrates sklearn pipelines and persisted preprocessing/model artifacts. Use it for
-  the mechanics; for this project, prefer persisting the fitted preprocessing and estimator
-  together as one Pipeline rather than as separate objects.
 - [sklearn — Model persistence](https://scikit-learn.org/stable/model_persistence.html),
   including its security and version-compatibility warnings
 
@@ -370,8 +449,9 @@ limitations are.
 
 **Labels:** `gate-2`, `review`
 
-**Pass criteria:** no leakage; honest temporal holdout; ML beats the naive baseline
-(especially on thin-support flights); choice justified.
+**Pass criteria:** no leakage; honest temporal CV (`TimeSeriesSplit`) plus untouched
+final holdout; ML beats the naive baseline (especially on thin-support flights); choice
+justified.
 **Fail path:** ship the linear baseline, drop RF.
 
 ---

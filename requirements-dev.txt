@@ -1,0 +1,14 @@
+# Development-only dependencies.
+#
+#   pip install -r requirements-dev.txt
+#
+# Installs everything the app needs, plus the notebook environment used to
+# build it. The deployed app runs a Streamlit script, not a notebook, so
+# jupyter is deliberately kept out of requirements.txt — shipping it to
+# Community Cloud would install a notebook server the app never touches,
+# against a 690MB memory floor.
+
+-r requirements.txt
+
+# Metapackage: pulls notebook, jupyterlab, ipykernel and friends.
+jupyter==1.1.1
