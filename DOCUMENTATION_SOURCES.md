@@ -18,6 +18,9 @@ never substitute for a doc citation when a methodology decision is being justifi
 - `scikit-learn` is pinned to **1.7.2** in `requirements.txt`. These links point at
   *current stable* docs, so re-check that a page still describes 1.7.2 behaviour before
   citing it — and re-check all of them if the pin is ever bumped.
+  **This drift is live, not hypothetical:** as of 2026-08-21 `scikit-learn.org/stable/`
+  serves **1.9.0**. Every sklearn behaviour cited in `PROJECT_ISSUES.md` has been
+  re-checked against the locally installed 1.7.2 before being written down.
 
 ## Official documentation (authoritative — cite these)
 
@@ -38,9 +41,11 @@ never substitute for a doc citation when a methodology decision is being justifi
 - [Pipelines and composite estimators user guide](https://scikit-learn.org/stable/modules/compose.html)
 - [Linear Models user guide](https://scikit-learn.org/stable/modules/linear_model.html) (§1.1.1 Ordinary Least Squares)
 - [Time-related feature engineering example](https://scikit-learn.org/stable/auto_examples/applications/plot_cyclical_feature_engineering.html) — why raw HHMM-style ordinal time features hurt linear models but not tree models, and the periodic/cyclical encoding fix
+- [`SplineTransformer` API reference](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.SplineTransformer.html) — the `extrapolation="periodic"` option Issue 4 uses to wrap scheduled departure time across midnight
 - [Ensembles user guide](https://scikit-learn.org/stable/modules/ensemble.html)
 - [`RandomForestRegressor` API reference](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestRegressor.html)
 - [Model evaluation: metrics and scoring](https://scikit-learn.org/stable/modules/model_evaluation.html) (MAE, RMSE)
+- [Tuning the hyper-parameters of an estimator](https://scikit-learn.org/stable/modules/grid_search.html) — only if the optional Issue 8b is opened; not in scope before Gate 2
 - [Model persistence](https://scikit-learn.org/stable/model_persistence.html) (security/version-compatibility warnings)
 
 ### numpy
@@ -59,6 +64,8 @@ Planned for Gate 3 (Issues 14-16); pinned to **1.51.0** in `requirements.txt`.
 - [Deploy overview](https://docs.streamlit.io/deploy)
 - [Prep and deploy on Community Cloud](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app)
 - [App dependencies](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/app-dependencies)
+- [Caching](https://docs.streamlit.io/develop/concepts/architecture/caching) — `st.cache_resource` for the model artifact, `st.cache_data` for the profile-median lookup (Issue 14); Streamlit reruns the whole script on every widget interaction
+- [Manage your app](https://docs.streamlit.io/deploy/streamlit-community-cloud/manage-your-app) — Community Cloud resource limits (memory floor/ceiling) that bound the model artifact size in Issues 8 and 16
 
 ### Data source (not software docs, but the authoritative reference for every raw column)
 - [BTS/DOT TranStats — Reporting Carrier On-Time Performance](https://transtats.bts.gov/DL_SelectFields.aspx?gnoyr_VQ=FGJ&QO_fu146_anzr=b0-gvzr) — field definitions for every column in the raw dataset; check here before asserting what a column means

@@ -33,7 +33,7 @@ Measured properties relevant to the review:
 
 | property | measured value |
 |---|---|
-| flights/day | 242 – 555 (2.29×), summer ≈ 50% above winter |
+| flights/day | 242 – 555 (2.29×), summer ≈ 34% above winter (Jun–Aug 513.1/day vs Dec–Feb 383.4) |
 | `ArrDelay` | mean 4.91, std 43.58, p50 −4, p75 11, max 3359 |
 | `Flight_Number_Reporting_Airline` | 2,591 distinct |
 | `Dest` | 96 distinct |
@@ -148,9 +148,12 @@ The split-on-dates decision is forced by D2:
 > condition is met, each test set covers the same time duration, while the train set size
 > accumulates data from previous splits."
 
-Verified against the data: splitting raw rows puts all 5 fold boundaries mid-date and
-produces folds spanning 106–136 days at identical row counts. Splitting the 731 unique
-dates gives exactly 106 validation days per fold with zero date overlap.
+Verified against the data, on the train pool the issue actually splits (639 dates,
+285,649 rows): splitting raw rows puts all 5 fold boundaries mid-date and produces folds
+spanning 94–122 days at identical row counts of 47,608. Splitting the 639 train-pool dates
+gives exactly 106 validation days per fold with zero date overlap. (The row-split defect is
+not an artifact of the partition — splitting all 324,490 rows gives spans of 106–136 days,
+same failure, different range.)
 
 ### Issue 3 — Naive per-profile baseline
 **Asks:** per-profile historical median, computed per fold, scored on the same folds.
