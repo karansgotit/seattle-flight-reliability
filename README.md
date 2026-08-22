@@ -4,7 +4,7 @@ Compare two Seattle-origin domestic flights using historical BTS on-time perform
 
 ## Project Status
 
-Data provenance, quality audit, feature audit, and cleaning are complete. A clean interim dataset of 324,490 SEA-origin flights is in place and the baseline modelling notebook is set up with the feature set selected. No model has been trained yet.
+Data provenance, quality audit, feature audit, and cleaning are complete. A clean interim dataset of 324,490 SEA-origin flights is in place, the baseline modelling notebook is set up with the feature set selected, and the temporal train/test split and cross-validation strategy are defined and verified. No model has been trained yet.
 
 ## Problem
 
@@ -32,6 +32,14 @@ Every one of the 110 raw columns was sorted into target, pre-booking, post-fligh
 
 `ArrDelay` is the regression target. Cancelled and diverted flights have a null `ArrDelay` because they never arrive, so those rows are dropped. This narrows the model's scope: it answers "given that this flight operates and arrives, what arrival delay should I expect?" It does not predict cancellation or diversion risk.
 
+## Evaluation Strategy
+
+The data is split by calendar date, not by row: a single cutoff of `2025-10-01` separates a **train pool** (2024-01-01 to 2025-09-30, 639 dates, 285,649 rows) from a held-out **test** partition (2025-10-01 to 2025-12-31, 92 dates, 38,841 rows, ~12%). Test is touched exactly once, at final evaluation — it is never used to compare or select models.
+
+There is no separate fixed validation set. Every candidate model is scored on the same 5 `TimeSeriesSplit` folds over the train pool, so comparisons across models are apples-to-apples. The splitter is run over the array of unique dates in the train pool, not over rows, because flight rows are not evenly spaced (242–555 flights/day) while calendar dates are — splitting on rows would let a single date's flights land on both sides of a fold, which is exactly what this design avoids. `gap=0` is used deliberately: no feature here is lagged or rolling, so no constructed value could leak across a fold boundary.
+
+One limitation worth stating plainly: because the split is temporal, the test partition falls entirely in Q4 (Oct–Dec). The final holdout number will describe winter operations, not a year-round average.
+
 ## Output
 
 Done:
@@ -39,6 +47,7 @@ Done:
 - Data provenance memo (`reports/data_provenance.md`)
 - Data quality audit (`reports/data_quality_audit.md`)
 - Feature availability audit (`reports/feature_audit.md`)
+- Temporal train/test split and cross-validation strategy (see Evaluation Strategy above)
 
 Planned:
 
