@@ -4,7 +4,7 @@ Compare two Seattle-origin domestic flights using historical BTS on-time perform
 
 ## Project Status
 
-Data provenance, quality audit, feature audit, and cleaning are complete. A clean interim dataset of 324,490 SEA-origin flights is in place, the baseline modelling notebook is set up with the feature set selected, and the temporal train/test split and cross-validation strategy are defined and verified. No model has been trained yet.
+Data provenance, quality audit, feature audit, and cleaning are complete. A clean interim dataset of 324,490 SEA-origin flights is in place, the temporal train/test split and cross-validation strategy are defined and verified, and the naive per-profile median baseline is built and scored. No trained model exists yet — the baseline is what any real model will need to beat.
 
 ## Problem
 
@@ -40,6 +40,14 @@ There is no separate fixed validation set. Every candidate model is scored on th
 
 One limitation worth stating plainly: because the split is temporal, the test partition falls entirely in Q4 (Oct–Dec). The final holdout number will describe winter operations, not a year-round average.
 
+## Naive Baseline
+
+The comparator every real model has to beat: a per-flight-profile historical median of `ArrDelay`, scored with the same 5 `TimeSeriesSplit` folds as every other candidate. Median, not mean, since 57.2% of SEA departures arrive early and a thin right tail (p99=154, max=3359) pulls the mean up — median is also the mathematically correct target when scoring with MAE.
+
+Most flight profiles (carrier + flight number + destination) don't have enough training rows to trust a group median on their own, so predictions fall back through a 3-rung ladder: per-flight-profile median (needs ≥10 training rows), then carrier + scheduled-departure-hour median (also thresholded at ≥10), then the fold's flat global median. `n=10` was chosen by checking the thinnest fold: at that threshold only 5% of its training rows sit in profiles too thin to trust, versus 40% of individual profiles — most thin profiles carry little row weight. Rung usage is tracked and counted per fold rather than assumed, so the baseline can't quietly become "a global-median model wearing a per-profile label."
+
+Rung 2's grouping was chosen by testing, not guessing: 11 candidate groupings were scored on the same folds, and carrier + departure-hour won clearly over the more obvious carrier + destination, since destination fragments groups without adding real signal while departure hour captures a genuine ~10-minute delay-propagation effect across the day. Mean cross-validated MAE is 19.95 minutes (std 1.21). A measured ceiling check — the best any median-based approach could theoretically do — shows only about 1.7 minutes of headroom above a flat global median, so a real model landing close to this number later is not necessarily a bug; `ArrDelay` itself is largely unpredictable from booking-time information alone.
+
 ## Output
 
 Done:
@@ -48,10 +56,11 @@ Done:
 - Data quality audit (`reports/data_quality_audit.md`)
 - Feature availability audit (`reports/feature_audit.md`)
 - Temporal train/test split and cross-validation strategy (see Evaluation Strategy above)
+- Naive per-profile median baseline (see Naive Baseline above)
 
 Planned:
 
-- Baseline model
+- Linear regression candidate model
 - Random forest candidate model
 - Two-flight comparison interface
 - Model documentation with limitations and honest project framing
