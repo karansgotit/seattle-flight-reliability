@@ -443,6 +443,17 @@ if width ever becomes a problem again:
 This configuration is the policy Issue 3's ladder and Issue 14's user-facing message both
 refer back to. Change it here, and update both.
 
+**One half of this policy is enforced in Issue 14, not here.** `min_frequency` is a single
+threshold applied to every column handed to the encoder, and the columns need different
+ones. `Dest` has a genuinely thin tail (minimum count 1–3 depending on the fold), so
+`min_frequency=4` manufactures a bucket for it in every fold. `IATA_CODE_Reporting_Airline`
+does not: its rarest carrier has 148 rows in the thinnest fold and 744 across the full
+train pool, so no sane threshold pools one, `infrequent_categories_` is `None` for that
+column, and the unknown-category guarantee above silently does not hold for carriers. The
+reasoning for why no encoder setting fixes that, and the input-validation guard that does,
+live in **Issue 14 — Unseen-carrier guard**. D-5 therefore spans both issues: the encoder
+configuration here, the carrier guard there. Change either and reconcile the other.
+
 **Done when**
 - Encoder lives inside a `Pipeline` (preprocessing + estimator), so `cross_val_score` /
   `cross_validate` refits it fresh on each fold's training rows — never fit once on the
@@ -907,10 +918,57 @@ limits."
   `DayOfWeek`, and `DayofMonth`)
 - Unseen categories produce a graceful message, not a stack trace — and the message is
   consistent with the **Issue 4c policy**, which is the single source of truth for this
-  behaviour (D-5). The encoder maps an unknown to the infrequent bucket rather than
-  silently to the reference category; the UI should say the prediction is based on limited
-  history for that carrier or destination.
+  behaviour (D-5). For `Dest`, the encoder maps an unknown to the infrequent bucket rather
+  than silently to the reference category, and the UI should say the prediction is based on
+  limited history for that destination. For `IATA_CODE_Reporting_Airline` the encoder
+  provides no such bucket — see the unseen-carrier guard below, which is where that half of
+  the policy is enforced.
 - Flight-number input is used to look up the Issue 3 profile, not passed to the model (D-1)
+
+#### Unseen-carrier guard (the app-layer half of Issue 4c)
+
+Issue 4c gives `Dest` a working infrequent bucket. It does **not** give one to
+`IATA_CODE_Reporting_Airline`, and that gap is deliberate — it is closed here, not there.
+
+Measured on the train pool: the rarest carrier has 148 rows in the thinnest fold and 744
+across the full pool, so `min_frequency=4` never pools a carrier. `infrequent_categories_`
+for that column is `None`, and with no bucket to route to,
+`handle_unknown="infrequent_if_exist"` degrades to all-zeros — byte-identical to the
+category removed by `drop="first"`. A carrier absent from training is therefore predicted
+as the reference carrier, silently and with no error.
+
+No encoder setting fixes this honestly. The shipped encoder is fit on the full train pool,
+where the carrier counts are `AS` 133,628 · `DL` 55,331 · `OO` 48,546 · `UA` 15,862 ·
+`WN` 14,409 · `AA` 9,935 · `F9` 2,673 · `HA` 1,958 · `NK` 1,322 · `B6` 1,241 · `MQ` 744 —
+so forcing a bucket takes `min_frequency=745` to capture even `MQ`, and roughly 2,000 to
+capture four carriers. That trains the bucket on the *rarest existing* carriers at SEA and
+burns a real carrier's coefficient to do it — but rare-at-SEA and new-to-SEA are different
+populations, so the resulting number describes nothing. A sentinel category via
+`categories=` fares no better: its column is all-zero across training, so least squares
+returns a zero coefficient and it predicts as the reference anyway.
+
+Cross-validation cannot surface this. Zero unseen carriers appear in any of the five
+validation folds — the bug is real in principle and never fires on 2024-2025 data. The app
+predicts 2026+, where a carrier beginning SEA service is an ordinary event.
+
+**The severity is specific to this product.** The tool compares two flights. An unrecognised
+carrier does not merely return a wrong number; it returns a *comparison* in which one side
+carries an unrelated carrier's delay profile while presenting as authoritative. The
+question the user came to ask is precisely the one that breaks.
+
+**Done when**
+- The carrier from user input is checked against the fitted encoder's `categories_` before
+  `.predict()` is called, and an unrecognised value branches to an explanatory message
+  instead of a prediction
+- The message states the reason — no training data for that carrier, so no reliable
+  estimate — rather than failing generically
+- If the carrier input is a dropdown populated from the fitted categories, that is recorded
+  as a **deliberate guarantee**, not left as an accident of the widget: a flight-number
+  lookup or free-text field would silently reopen the hole
+- The same check covers `Dest`, which *does* have a bucket but whose bucket is fit on
+  almost nothing — on the full train pool `min_frequency=4` pools exactly four
+  destinations (`CID`, `BUF`, `MDT`, `GRB`), one row each, so its coefficient carries no
+  meaningful history either
 
 **Learn this first**
 
