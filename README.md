@@ -142,6 +142,8 @@ With `OneHotEncoder(drop="first", handle_unknown="ignore")`, an unseen category 
 
 No unseen carriers appeared in the validation folds, so cross-validation did not exercise this case. The planned interface must check carrier inputs against the fitted encoder’s `categories_` before predicting.
 
+Investigating this behavior surfaced a separate defect in scikit-learn itself: the unknown-category warning text was chosen from `handle_unknown` alone, without consulting the fitted data, so it claimed unknown categories would be grouped into an infrequent category even when no such category existed. Fixed upstream in [scikit-learn#34861](https://github.com/scikit-learn/scikit-learn/pull/34861), merged September 2026.
+
 ## Next Steps
 
 - Train and evaluate linear regression and random forest candidates
