@@ -56,22 +56,29 @@ def fig_departure_hour(train_pool):
     ax.axhline(0, color=GRID, lw=1)
     ax.plot(med.index, med.values, color=BARS[0], lw=2, marker="o", ms=3.5)
     lo, hi = med.idxmin(), med.idxmax()
-    ax.set_ylim(med.min() - 2.5, med.max() + 2.5)
-    # label the trough above its point and the peak below its point, so neither
-    # collides with the title or the x-axis
-    ax.annotate(f"{med[lo]:.0f} min at {lo:02d}:00", (lo, med[lo]),
-                textcoords="offset points", xytext=(6, 10),
-                ha="left", va="bottom", fontsize=8.5, color=INK)
-    ax.annotate(f"{med[hi]:.0f} min at {hi:02d}:00", (hi, med[hi]),
-                textcoords="offset points", xytext=(0, -13),
-                ha="center", va="top", fontsize=8.5, color=INK)
-    ax.set_title("Median arrival delay by scheduled departure hour")
-    ax.set_xlabel("Scheduled departure hour")
-    ax.set_ylabel("Median ArrDelay (min)")
+    ax.set_ylim(med.min() - 3.5, med.max() + 1.5)
+    # mark the two extremes on the line, and describe them in the empty
+    # lower-right corner so no text ever crosses the series
+    ax.scatter([lo, hi], [med[lo], med[hi]], s=42, zorder=5,
+               facecolor="white", edgecolor=BARS[0], linewidth=1.8)
+    rows = [(f"{lo:02d}:00", f"{med[lo]:.0f} min"),
+            (f"{hi:02d}:00", f"{med[hi]:.0f} min"),
+            ("spread", f"{med.max()-med.min():.0f} min")]
+    w = max(len(v) for _, v in rows)
+    ax.text(0.985, 0.06,
+            "\n".join(f"{k:<7}{v:>{w}}" for k, v in rows),
+            transform=ax.transAxes, ha="right", va="bottom",
+            fontsize=8.5, color=INK, linespacing=1.5, family="monospace",
+            bbox=dict(boxstyle="round,pad=0.5", facecolor="white",
+                      edgecolor=GRID, linewidth=0.8))
+    ax.set_title("Median arrival delay by scheduled departure hour", pad=12)
+    ax.set_xlabel("Scheduled departure hour", labelpad=8)
+    ax.set_ylabel("Median ArrDelay (min)", labelpad=8)
     ax.set_xticks(range(5, 24, 2)); ax.grid(axis="y", color=GRID, lw=0.6)
-    ax.text(0.5, -0.30, f"Train pool only, {len(train_pool):,} flights. "
-            f"Spread of {med.max()-med.min():.0f} minutes across the day.",
-            transform=ax.transAxes, ha="center", fontsize=8, color=MUTED)
+    ax.margins(x=0.03)
+    ax.text(0, -0.24, f"Train pool only, {len(train_pool):,} flights. "
+            "Early departures run ahead of schedule; later ones absorb the day's delay.",
+            transform=ax.transAxes, ha="left", fontsize=8, color=MUTED)
     fig.savefig(f"{OUT}/delay_by_departure_hour.png"); plt.close(fig)
     return med
 
@@ -113,7 +120,7 @@ def fig_rung_usage(counts):
                         fontsize=8.5, color="white" if colour == BARS[0] else INK)
         bottom += pct
     ax.set_xlim(0, 100); ax.invert_yaxis()
-    ax.set_title("Which fallback rung produced each prediction")
+    ax.set_title("Which fallback rung produced each prediction", pad=12)
     ax.set_xlabel("Share of validation rows (%)")
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.26), ncol=3,
               frameon=False, fontsize=8)
@@ -132,11 +139,12 @@ def fig_fold_structure(train_pool, test, dates):
             left=test["FlightDate"].min(), color="#b5523f", height=0.55)
     ax.set_yticks(list(range(N_SPLITS)) + [N_SPLITS])
     ax.set_yticklabels([f"Fold {i}" for i in range(N_SPLITS)] + ["Held-out test"])
-    ax.invert_yaxis()
-    ax.axvline(CUTOFF, color=INK, ls="--", lw=1)
-    ax.text(CUTOFF, N_SPLITS + 0.55, " cutoff 2025-10-01", fontsize=8, color=INK,
-            va="center", ha="left")
-    ax.set_title("Cross-validation folds are cut on dates, never inside a day")
+    ax.set_ylim(N_SPLITS + 1.15, -0.75)          # inverted, with room under the bars
+    ax.axvline(CUTOFF, color=INK, ls="--", lw=1, zorder=1)
+    ax.annotate("cutoff 2025-10-01", xy=(CUTOFF, N_SPLITS + 0.85),
+                xytext=(-6, 0), textcoords="offset points",
+                fontsize=8, color=INK, va="center", ha="right")
+    ax.set_title("Cross-validation folds are cut on dates, never inside a day", pad=12)
     ax.grid(axis="x", color=GRID, lw=0.6)
     handles = [plt.Rectangle((0, 0), 1, 1, color=c) for c in (BARS[1], BARS[0], "#b5523f")]
     ax.legend(handles, ["Train", "Validation", "Test (untouched)"],
