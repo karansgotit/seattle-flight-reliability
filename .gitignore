@@ -28,7 +28,6 @@ data/processed/*
 *.joblib
 
 # Local reports/artifacts
-reports/figures/
 models/
 
 # Internal development tooling
