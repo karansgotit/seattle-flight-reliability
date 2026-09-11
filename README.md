@@ -25,7 +25,23 @@ The project uses Python 3.13.9. Runtime dependencies are pinned in `requirements
 
 ```bash
 python -m venv .venv
+```
+
+Activate it. On macOS or Linux:
+
+```bash
 source .venv/bin/activate
+```
+
+On Windows (PowerShell):
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+Then install:
+
+```bash
 pip install -r requirements-dev.txt
 ```
 
