@@ -8,8 +8,8 @@
 # https://scikit-learn.org/stable/model_persistence.html
 #
 # Re-pin from `pip freeze` in the training environment if that environment
-# changes, and re-check the links in DOCUMENTATION_SOURCES.md against the
-# pinned scikit-learn version.
+# changes, and re-check any scikit-learn documentation relied on against the
+# pinned version.
 #
 # Note: requirements.txt cannot pin the Python version. Local is 3.13.9 —
 # set the matching version in Community Cloud's advanced settings at deploy.

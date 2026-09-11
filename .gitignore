@@ -30,3 +30,14 @@ data/processed/*
 # Local reports/artifacts
 reports/figures/
 models/
+
+# Internal development tooling
+CLAUDE.md
+
+# Editor backups
+*.bak
+
+# Personal notes, kept local
+LEARNINGS.md
+DOCUMENTATION_SOURCES.md
+PROJECT_ISSUES.md

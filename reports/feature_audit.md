@@ -2,6 +2,8 @@
 
 **Question:** Is this value known at booking time, before the flight operates?
 
+The raw BTS monthly file has 110 columns. Every one is accounted for below: 1 target, 13 pre-booking, 71 post-flight, 25 drop.
+
 ## Target
 | Column | Notes |
 |--------|-------|
@@ -126,3 +128,4 @@
 | Flights | |
 | DistanceGroup | |
 | Origin | All rows are SEA-origin after filtering, so this column is constant and has no predictive value |
+| Unnamed: 109 | The raw CSV header ends with a trailing comma, so every row carries a 110th field with an empty name and no values. `pandas` labels it `Unnamed: 109`. It is a file-format artifact, not a BTS variable, and is dropped on load |
