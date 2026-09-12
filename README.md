@@ -18,7 +18,7 @@ Compares two Seattle-origin domestic flights on historical arrival delay, using 
 
 ## Steps
 
-> 1. [Audit the raw data](./notebooks/data_quality_audit.ipynb) — nulls, duplicates, month coverage → [`reports/data_quality_audit.md`](./reports/data_quality_audit.md)
+> 1. [Audit the raw data](./notebooks/data_quality_audit.ipynb) — nulls, duplicates, month coverage → [`reports/data_quality_audit.md`](./reports/data_quality_audit.md). Source, coverage and pull date recorded in [`reports/data_provenance.md`](./reports/data_provenance.md)
 > 2. [Classify all 110 raw columns](./reports/feature_audit.md) as target, pre-booking, post-flight or drop, so no post-flight field leaks into training
 >    |Target|Pre-booking|Post-flight|Drop|
 >    |-:|-:|-:|-:|
