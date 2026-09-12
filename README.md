@@ -94,8 +94,6 @@ data/raw/data_for_2025/*.csv     12 files
 
 The third needs the CSV from the second. `reports/figures/make_figures.py` regenerates the figures above.
 
-**4. Check correctness.** There is no automated test suite yet. `linear_baseline.ipynb` asserts that fold train and validation dates never overlap, that the test period starts after the train pool ends, and that the two partitions sum to the full dataset. It also counts fallback usage per fold.
-
 ## Next Steps
 
 - Train and score linear regression and random forest candidates
