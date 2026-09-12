@@ -49,40 +49,6 @@ def load():
     return df[df["FlightDate"] < CUTOFF], df[df["FlightDate"] >= CUTOFF]
 
 
-def fig_departure_hour(train_pool):
-    med = train_pool.groupby("DepHour")["ArrDelay"].median()
-    med = med[(med.index >= 5) & (med.index <= 23)]
-    fig, ax = plt.subplots(figsize=(7.2, 3.2))
-    ax.axhline(0, color=GRID, lw=1)
-    ax.plot(med.index, med.values, color=BARS[0], lw=2, marker="o", ms=3.5)
-    lo, hi = med.idxmin(), med.idxmax()
-    ax.set_ylim(med.min() - 3.5, med.max() + 1.5)
-    # mark the two extremes on the line, and describe them in the empty
-    # lower-right corner so no text ever crosses the series
-    ax.scatter([lo, hi], [med[lo], med[hi]], s=42, zorder=5,
-               facecolor="white", edgecolor=BARS[0], linewidth=1.8)
-    rows = [(f"{lo:02d}:00", f"{med[lo]:.0f} min"),
-            (f"{hi:02d}:00", f"{med[hi]:.0f} min"),
-            ("spread", f"{med.max()-med.min():.0f} min")]
-    w = max(len(v) for _, v in rows)
-    ax.text(0.985, 0.06,
-            "\n".join(f"{k:<7}{v:>{w}}" for k, v in rows),
-            transform=ax.transAxes, ha="right", va="bottom",
-            fontsize=8.5, color=INK, linespacing=1.5, family="monospace",
-            bbox=dict(boxstyle="round,pad=0.5", facecolor="white",
-                      edgecolor=GRID, linewidth=0.8))
-    ax.set_title("Median arrival delay by scheduled departure hour", pad=12)
-    ax.set_xlabel("Scheduled departure hour", labelpad=8)
-    ax.set_ylabel("Median ArrDelay (min)", labelpad=8)
-    ax.set_xticks(range(5, 24, 2)); ax.grid(axis="y", color=GRID, lw=0.6)
-    ax.margins(x=0.03)
-    ax.text(0, -0.24, f"Train pool only, {len(train_pool):,} flights. "
-            "Early departures run ahead of schedule; later ones absorb the day's delay.",
-            transform=ax.transAxes, ha="left", fontsize=8, color=MUTED)
-    fig.savefig(f"{OUT}/delay_by_departure_hour.png"); plt.close(fig)
-    return med
-
-
 def rung_counts(train_pool, dates):
     out = []
     for fold, tr, va, _, _ in make_cv_folds(train_pool, dates):
@@ -156,12 +122,9 @@ def fig_fold_structure(train_pool, test, dates):
 if __name__ == "__main__":
     train_pool, test = load()
     dates = np.sort(train_pool["FlightDate"].unique())
-    med = fig_departure_hour(train_pool)
     counts = rung_counts(train_pool, dates)
     fig_rung_usage(counts)
     fig_fold_structure(train_pool, test, dates)
     print(f"train pool {len(train_pool):,} rows / {len(dates)} dates | test {len(test):,} rows")
-    print(f"departure-hour spread: {med.max()-med.min():.1f} min "
-          f"(min {med.min():.0f} at {med.idxmin():02d}:00, max {med.max():.0f} at {med.idxmax():02d}:00)")
     for f, a, b, c in counts:
         print(f"  fold {f}: rung1={a} rung2={b} rung3={c}")

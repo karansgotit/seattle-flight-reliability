@@ -1,189 +1,123 @@
 # Seattle Flight Reliability
 
-Compares two Seattle-origin domestic flights on historical arrival delay, using BTS on-time data and only what a traveler knows before booking: carrier, destination, scheduled times, and date.
+## Contents
 
-**Current status:** Data audits, cleaning, evaluation splits, and a median baseline are done. The baseline scores a mean cross-validation MAE of **19.95 minutes** across five temporal folds. No model is trained yet.
+- [Introduction](#introduction)
+- [Steps](#steps)
+- [Results](#results)
+- [Usage](#usage)
+- [Next Steps](#next-steps)
+- [Repository Layout](#repository-layout)
+- [References](#references)
 
-## Data
+## Introduction
 
-- **Source:** BTS TranStats, Reporting Carrier On-Time Performance
-- **Period:** January 2024 through December 2025
-- **Downloaded:** July 20, 2026
-- **Scope:** SEA-origin U.S. domestic flights
+Compares two Seattle-origin domestic flights on historical arrival delay, using only what a traveler knows before booking: carrier, destination, scheduled times, and date. Built on US DOT on-time records for 2024-2025.
 
-The raw download contains 14,080,680 rows and 110 columns. Filtering to SEA departures leaves 328,559 rows. Removing rows with missing arrival delay (`ArrDelay`) leaves **324,490 flights**.
+**Status:** the median baseline is built and scored. No candidate model is trained yet.
 
-All 24 months were verified present. The audits cover missing values, duplicates, and feature availability.
+## Steps
 
-Raw files are not tracked in Git. The cleaned dataset is written to `data/interim/seattle_ontime_clean.csv`.
+> 1. [Audit the raw data](./notebooks/data_quality_audit.ipynb) — nulls, duplicates, month coverage → [`reports/data_quality_audit.md`](./reports/data_quality_audit.md)
+> 2. [Classify all 110 raw columns](./reports/feature_audit.md) as target, pre-booking, post-flight or drop, so no post-flight field leaks into training
+>    |Target|Pre-booking|Post-flight|Drop|
+>    |-:|-:|-:|-:|
+>    |1|**13**|71|25|
+> 3. [Filter and clean](./notebooks/data_cleaning.ipynb) → `data/interim/seattle_ontime_clean.csv`
+>    |Stage|Rows|
+>    |:-|-:|
+>    |Raw download|14,080,680|
+>    |SEA departures|328,559|
+>    |Non-null `ArrDelay`|**324,490**|
+>
+>    Rows without an `ArrDelay` are cancelled or diverted, so the project is scoped to flights that operate and arrive.
+> 4. [Split on dates, not rows](./notebooks/linear_baseline.ipynb) — flight counts run 242-555 per day, so a row split cuts individual days in half
+>    |Partition|Period|Flights|Dates|
+>    |:-|:-|-:|-:|
+>    |Train pool|2024-01-01 to 2025-09-30|285,649|639|
+>    |Held-out test|2025-10-01 to 2025-12-31|38,841|92|
+>
+>    Five `TimeSeriesSplit` folds run over the unique-date array, then map back to rows. `gap=0`, since no feature is lagged or rolling. The test partition is Q4 only, so its score will describe winter operations.
+>
+>    ![Cross-validation fold structure](./reports/figures/cv_fold_structure.png)
+> 5. [Build a 3-level median baseline](./notebooks/linear_baseline.ipynb) — medians match MAE and resist the long right tail. Level 2 was chosen from 11 candidate groupings: carrier + departure hour lifted 0.415 min over the global median, against 0.149 for carrier + destination
+>    1. Carrier + flight number + destination, n ≥ 10
+>    2. Carrier + scheduled departure hour, n ≥ 10
+>    3. Global training median
+> 6. [Encode the features](./notebooks/linear_baseline.ipynb) for a linear candidate
+>    - `CRSDepTime` and `CRSArrTime` are HHMM clock readings, not quantities. Converted to minutes since midnight, then sin/cos encoded so 23:59 and 00:01 sit 0.0087 apart instead of 1,438
+>    - `drop="first"`, since an unregularised `LinearRegression` leaves coefficients undetermined otherwise
+>    - Two encoders, split by whether the category set is closed. `Month` and `DayOfWeek` get explicit categories; carrier and destination cannot be enumerated ahead of time
+>
+>    This surfaced a defect in scikit-learn itself. The library turns text columns like carrier codes into numeric ones, and warns you when it encounters a value it never saw during training. That warning was written from the encoder's settings alone, without checking what the encoder was actually doing, so it could report that a value was handled one way when it was really handled another way. Fixed upstream in [scikit-learn#34861](https://github.com/scikit-learn/scikit-learn/pull/34861), merged September 2026.
 
-## Setup and Reproduction
+## Results
 
-### Install dependencies
-
-The project uses Python 3.13.9. Runtime dependencies are pinned in `requirements.txt`, including pandas 2.3.3, NumPy 2.3.5, and scikit-learn 1.7.2.
-
-```bash
-python -m venv .venv
-```
-
-Activate it. On macOS or Linux:
-
-```bash
-source .venv/bin/activate
-```
-
-On Windows (PowerShell):
-
-```powershell
-.venv\Scripts\Activate.ps1
-```
-
-Then install:
-
-```bash
-pip install -r requirements-dev.txt
-```
-
-`requirements-dev.txt` includes Jupyter. Use `requirements.txt` if you only need runtime dependencies.
-
-### Download the data
-
-Download monthly files from the [BTS Reporting Carrier On-Time Performance table](https://transtats.bts.gov/DL_SelectFields.aspx?gnoyr_VQ=FGJ&QO_fu146_anzr=b0-gvzr). Select every field and download January 2024 through December 2025, one month at a time.
-
-The 24 downloads total roughly 677 MB compressed. Extract the CSVs into:
-
-```text
-data/raw/data_for_2024/*.csv
-data/raw/data_for_2025/*.csv
-```
-
-Each directory should contain 12 monthly CSVs.
-
-### Run the notebooks
-
-From the repository root:
-
-```bash
-cd notebooks
-jupyter notebook
-```
-
-Run the notebooks in this order:
-
-| Notebook | Purpose | Output |
-|---|---|---|
-| `data_quality_audit.ipynb` | Check raw data counts, missing values, duplicates, and month coverage | Audit results documented in `reports/data_quality_audit.md` |
-| `data_cleaning.ipynb` | Filter SEA departures and remove rows with missing `ArrDelay` | `data/interim/seattle_ontime_clean.csv` |
-| `linear_baseline.ipynb` | Build evaluation splits, score the median baseline, and explore feature encoding | Fold definitions, baseline scores, and encoding analysis |
-
-Notebook paths are relative to `notebooks/`. The first two notebooks read the raw files independently; the third requires the cleaned CSV.
-
-### Check correctness
-
-There is no standalone automated test suite yet. Running `linear_baseline.ipynb` executes assertions that check:
-
-- Training and validation dates do not overlap within a fold
-- The held-out test period starts after the training period ends
-- Train and test row counts sum to the cleaned dataset’s row count
-
-The notebook also counts baseline fallback usage for each fold. Reusable logic in `src/` and real tests come next.
-
-## Features and Target
-
-Every raw column was classified as a target, pre-booking feature, post-flight field, or field to drop. This left **13 pre-booking features** and the target, `ArrDelay`.
-
-Actual flight times, departure delay, taxi time, air time, and delay-cause fields are excluded to prevent target leakage. `Origin` is excluded because every retained flight departs from SEA.
-
-The dataset excludes rows with missing `ArrDelay`, including cancelled and diverted flights without a recorded arrival delay. Results therefore describe arrival delay among retained flights, not cancellation or diversion risk.
-
-The full column audit is in `reports/feature_audit.md`.
-
-## Evaluation
-
-The data is split by calendar date:
-
-| Partition | Period | Flights |
-|---|---|---:|
-| Train pool | January 1, 2024–September 30, 2025 | 285,649 |
-| Held-out test | October 1–December 31, 2025 | 38,841 |
-
-Model selection uses five `TimeSeriesSplit` folds within the train pool. The splitter operates on unique dates, then maps those dates back to flight rows. This keeps each day’s flights together.
-
-All candidates will use the same folds. The final test set is reserved for one evaluation after model selection.
-
-![Cross-validation fold structure](reports/figures/cv_fold_structure.png)
-
-The folds use `gap=0`; current features contain no lagged or rolling values. Because the test period covers only October through December, its score will not represent year-round performance.
-
-## Median Baseline
-
-The baseline predicts arrival delay using training-set medians, with three fallback levels:
-
-1. **Carrier + flight number + destination**, if the group has at least 10 training rows
-2. **Carrier + scheduled departure hour**, if the group has at least 10 training rows
-3. **Global training median**
-
-Medians match the evaluation metric, mean absolute error (MAE), and are less affected by the long tail of large delays.
-
-The baseline achieved a **mean cross-validation MAE of 19.95 minutes**, with a standard deviation of 1.21 minutes across five folds.
+| Metric | Value |
+|---|---:|
+| Mean cross-validated MAE | **19.95 min** |
+| Standard deviation across folds | 1.21 min |
+| Folds | 5 |
 
 ![Fallback usage by fold](reports/figures/rung_usage_by_fold.png)
 
-Flight-profile medians cover 59–82% of validation rows, depending on the fold. Carrier and departure hour cover most remaining rows; fewer than 1.5% use the global median in any fold.
+Flight-profile medians cover 59-82% of validation rows. Fewer than 1.5% fall through to the global median in any fold.
 
-Eleven groupings were evaluated for the second fallback. Carrier and departure hour performed best. On rows requiring a fallback, it reduced MAE relative to the global median by 0.415 minutes, compared with 0.149 minutes for carrier and destination.
+The second-level grouping was selected on the same folds used to report the score, which is mild selection bias. The held-out test set remains untouched.
 
-The grouping was selected using the same cross-validation folds used to report performance, so the score has some selection bias. The held-out test set remains unused.
+## Usage
 
-## Issues Found
+**1. Install.** Python 3.13.9. Versions are pinned in `requirements.txt`: pandas 2.3.3, NumPy 2.3.5, scikit-learn 1.7.2.
 
-### Splitting flight rows divided individual days
+```bash
+python -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\Activate.ps1
+pip install -r requirements-dev.txt
+```
 
-The initial cross-validation setup split rows directly. Daily flight counts vary, so all five boundaries placed flights from the same date in both training and validation.
+`requirements-dev.txt` adds Jupyter. Use `requirements.txt` for runtime only.
 
-Splitting unique dates and mapping them back to rows removed the overlap.
+**2. Download the data.** Select every field in the [BTS table](https://transtats.bts.gov/DL_SelectFields.aspx?gnoyr_VQ=FGJ&QO_fu146_anzr=b0-gvzr) and download each month from 2024-01 to 2025-12. Roughly 677 MB compressed. Extract into:
 
-### Overall scores hid weak fallback performance
+```text
+data/raw/data_for_2024/*.csv     12 files
+data/raw/data_for_2025/*.csv     12 files
+```
 
-Most predictions use the first-level flight-profile median. Scoring the whole dataset made differences between fallback groupings appear small.
+**3. Run the notebooks** from inside `notebooks/`, in this order.
 
-Evaluating only rows that needed a fallback showed that carrier and departure hour performed better than carrier and destination.
+| Notebook | Produces |
+|---|---|
+| `data_quality_audit.ipynb` | Counts, nulls, duplicates, month coverage, written up in `reports/data_quality_audit.md` |
+| `data_cleaning.ipynb` | `data/interim/seattle_ontime_clean.csv` |
+| `linear_baseline.ipynb` | Splits, folds, baseline score, encoding work |
 
-![Median arrival delay by scheduled departure hour](reports/figures/delay_by_departure_hour.png)
+The third needs the CSV from the second. `reports/figures/make_figures.py` regenerates the figures above.
 
-### Unknown carriers need explicit handling
-
-With `OneHotEncoder(drop="first", handle_unknown="ignore")`, an unseen category and the dropped reference category both encode as all zeros.
-
-No unseen carriers appeared in the validation folds, so cross-validation did not exercise this case. The planned interface must check carrier inputs against the fitted encoder’s `categories_` before predicting.
-
-Investigating this behavior surfaced a separate defect in scikit-learn itself: the unknown-category warning text was chosen from `handle_unknown` alone, without consulting the fitted data, so it claimed unknown categories would be grouped into an infrequent category even when no such category existed. Fixed upstream in [scikit-learn#34861](https://github.com/scikit-learn/scikit-learn/pull/34861), merged September 2026.
+**4. Check correctness.** There is no automated test suite yet. `linear_baseline.ipynb` asserts that fold train and validation dates never overlap, that the test period starts after the train pool ends, and that the two partitions sum to the full dataset. It also counts fallback usage per fold.
 
 ## Next Steps
 
-- Train and evaluate linear regression and random forest candidates
-- Extract reusable notebook logic into `src/` and add automated tests
-- Build the two-flight comparison interface with input validation
-- Evaluate the selected model on the held-out test set
-- Document model performance and limitations
+- Train and score linear regression and random forest candidates
+- Extract notebook logic into `src/` and add automated tests
+- Build the two-flight comparison interface with unseen-carrier validation
+- Evaluate the selected model once on the held-out test set
 
 ## Repository Layout
 
 ```text
-notebooks/       Data audit, cleaning, and baseline notebooks
-reports/         Data provenance, quality, and feature audits
-reports/figures/  README figures, regenerated by make_figures.py
-data/raw/        Untracked BTS downloads
-data/interim/    Cleaned SEA-origin dataset
+notebooks/         Audit, cleaning, and baseline notebooks
+reports/           Provenance, quality, and feature audits
+reports/figures/   Figures above, regenerated by make_figures.py
+data/raw/          Untracked BTS downloads
+data/interim/      Cleaned SEA-origin dataset
 ```
 
-## Project Scope
+## References
 
-Built for learning and deployment practice. Consumer flight tools already report reliability. The comparison interface is not built yet.
+- [BTS Reporting Carrier On-Time Performance](https://transtats.bts.gov/DL_SelectFields.aspx?gnoyr_VQ=FGJ&QO_fu146_anzr=b0-gvzr) — data source
+- [scikit-learn `TimeSeriesSplit`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.TimeSeriesSplit.html) — the "samples must be equally spaced" requirement behind the date-based split
 
-## License and Data Use
+## License
 
-Code and documentation are released under the MIT License; see `LICENSE`.
-
-BTS data is not redistributed in this repository. Download it from TranStats using the instructions above and check the source’s terms before redistributing it.
+MIT, see [`LICENSE`](LICENSE). BTS data is not redistributed here; download it from TranStats and check the source's terms.
